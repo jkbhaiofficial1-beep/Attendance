@@ -1,0 +1,522 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Labor Attendance Tool | Professional Reports</title>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        :root {
+            --primary-blue: #0056b3;
+            --success-green: #4caf50;
+            --error-red: #f44336;
+            --warning-orange: #ff9800;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            overflow-x: hidden;
+        }
+
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.6);
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .modal-open .modal-content {
+            transform: translateY(0);
+        }
+
+        .attendance-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 800;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1.5px solid #e2e8f0;
+            background-color: white;
+            color: #94a3b8;
+        }
+        .attendance-btn.active-p { background-color: var(--success-green); color: white; border-color: #388e3c; }
+        .attendance-btn.active-a { background-color: var(--error-red); color: white; border-color: #d32f2f; }
+        .attendance-btn.active-ot { background-color: var(--warning-orange); color: white; border-color: #f57c00; }
+        .attendance-btn.active-off { background-color: #64748b; color: white; border-color: #475569; }
+
+        .active-tab { color: var(--primary-blue); }
+        .active-tab-bg { background-color: #eff6ff; }
+
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236366f1'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 1rem; }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="flex flex-col min-h-screen">
+        <header class="bg-[#0056b3] text-white p-5 pt-12 pb-6 flex items-center justify-between sticky top-0 z-20 shadow-md">
+            <div class="flex items-center gap-4">
+                <button id="back-btn" class="hidden p-1 -ml-1" onclick="goBack()">
+                    <i class="fa-solid fa-arrow-left text-xl"></i>
+                </button>
+                <h1 id="header-title" class="text-xl font-extrabold tracking-tight uppercase">Labors</h1>
+            </div>
+            <div id="header-right"></div>
+        </header>
+
+        <main id="main-content" class="flex-grow pb-32">
+        </main>
+
+        <nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 flex justify-around py-3 pb-6 z-30 shadow-lg">
+            <button onclick="switchTab('labors')" class="nav-item flex flex-col items-center gap-1 transition-all" id="nav-labors">
+                <div class="p-2 px-5 rounded-2xl active-tab-bg">
+                    <i class="fa-solid fa-users text-xl"></i>
+                </div>
+                <span class="text-[10px] font-black uppercase tracking-tighter">Labors</span>
+            </button>
+            <button onclick="switchTab('cashbook')" class="nav-item flex flex-col items-center gap-1 transition-all text-slate-400" id="nav-cashbook">
+                <div class="p-2 px-5 rounded-2xl">
+                    <i class="fa-solid fa-wallet text-xl"></i>
+                </div>
+                <span class="text-[10px] font-black uppercase tracking-tighter">Cashbook</span>
+            </button>
+            <button onclick="switchTab('settings')" class="nav-item flex flex-col items-center gap-1 transition-all text-slate-400" id="nav-settings">
+                <div class="p-2 px-5 rounded-2xl">
+                    <i class="fa-solid fa-gear text-xl"></i>
+                </div>
+                <span class="text-[10px] font-black uppercase tracking-tighter">Settings</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Modals -->
+    <div id="attendance-modal" class="fixed inset-0 z-50 hidden modal-overlay items-end justify-center">
+        <div class="bg-white w-full max-w-lg rounded-t-[3rem] p-8 pt-4 flex flex-col gap-6 modal-content shadow-2xl">
+            <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-2"></div>
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-extrabold text-slate-800">Mark Presence</h2>
+                <span id="modal-date" class="text-indigo-600 font-bold bg-indigo-50 px-4 py-1.5 rounded-full text-xs"></span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="saveAttendance('present')" class="py-5 rounded-3xl border-2 border-green-600 bg-green-500 text-white font-black text-xl active:scale-95">P</button>
+                <button onclick="saveAttendance('half')" class="py-5 rounded-3xl border-2 border-green-200 bg-green-50 text-green-600 font-black text-xl active:scale-95">½</button>
+                <button onclick="saveAttendance('onehalf')" class="py-5 rounded-3xl border-2 border-green-300 bg-green-100 text-green-700 font-black text-xl active:scale-95">P+½</button>
+                <button onclick="saveAttendance('double')" class="py-5 rounded-3xl border-2 border-green-400 bg-green-200 text-green-800 font-black text-xl active:scale-95">P+P</button>
+            </div>
+            <button onclick="closeAttendanceModal()" class="w-full py-4 rounded-3xl bg-slate-100 font-bold text-slate-500 mt-2">Cancel</button>
+        </div>
+    </div>
+
+    <div id="advance-modal" class="fixed inset-0 z-50 hidden modal-overlay items-end justify-center">
+        <div class="bg-white w-full max-w-lg rounded-t-[3rem] p-8 pt-4 flex flex-col gap-6 modal-content shadow-2xl">
+            <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-2"></div>
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-extrabold text-slate-800">Add Advance</h2>
+                <span id="advance-modal-date" class="text-indigo-600 font-bold bg-indigo-50 px-4 py-1.5 rounded-full text-xs"></span>
+            </div>
+            <div class="flex items-center gap-4 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                <i class="fa-solid fa-indian-rupee-sign text-indigo-500 text-2xl"></i>
+                <input id="advance-input" type="number" class="bg-transparent w-full outline-none font-black text-3xl placeholder:text-slate-200" placeholder="0.00" autofocus>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="closeAdvanceModal()" class="flex-1 py-4 rounded-3xl bg-slate-100 font-bold text-slate-500">Cancel</button>
+                <button onclick="saveAdvanceAmount()" class="flex-[1.5] py-4 rounded-3xl bg-[#0056b3] text-white font-bold">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 px-8 py-4 rounded-3xl bg-slate-900 text-white font-bold text-xs shadow-2xl z-[100] opacity-0 translate-y-10 pointer-events-none transition-all duration-300"><span id="toast-msg">Success!</span></div>
+
+    <script>
+        // --- Persistence ---
+        const DB_KEYS = { LABORS: 'ltool_elite_labors', ATT: 'ltool_elite_att', ADV: 'ltool_elite_adv' };
+        const load = (k, f) => localStorage.getItem(k) ? JSON.parse(localStorage.getItem(k)) : f;
+        const save = (k, d) => localStorage.setItem(k, JSON.stringify(d));
+
+        // --- State ---
+        let state = {
+            currentTab: 'labors',
+            currentView: 'list',
+            selectedLaborId: null,
+            currentMonth: new Date(),
+            labors: load(DB_KEYS.LABORS, []),
+            attendance: load(DB_KEYS.ATT, {}),
+            advances: load(DB_KEYS.ADV, {}),
+            selectedDateKey: null,
+            reportFilter: 'all' // all, present, half, absent, advance
+        };
+
+        function sync() {
+            save(DB_KEYS.LABORS, state.labors);
+            save(DB_KEYS.ATT, state.attendance);
+            save(DB_KEYS.ADV, state.advances);
+        }
+
+        function getLocalISO(date) {
+            const d = new Date(date); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+            return d.toISOString().split('T')[0];
+        }
+
+        function notify(msg) {
+            const t = document.getElementById('toast'); document.getElementById('toast-msg').innerText = msg;
+            t.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+            setTimeout(() => t.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none'), 2000);
+        }
+
+        // --- Summary Logic ---
+        function getSummary(id, monthDate) {
+            const att = state.attendance[id] || {};
+            const adv = state.advances[id] || {};
+            const labor = state.labors.find(l => l.id === id);
+            const rate = parseFloat(labor?.salaryAmount) || 0;
+            const monthPrefix = getLocalISO(monthDate).substring(0, 7);
+
+            let pDays = 0, totalAdv = 0, absents = 0;
+            Object.keys(att).forEach(d => {
+                if(d.startsWith(monthPrefix)) {
+                    const s = att[d];
+                    if(s === 'present') pDays += 1; else if(s === 'half') pDays += 0.5;
+                    else if(s === 'onehalf') pDays += 1.5; else if(s === 'double') pDays += 2;
+                    else if(s === 'absent') absents += 1;
+                }
+            });
+            Object.keys(adv).forEach(d => { if(d.startsWith(monthPrefix)) totalAdv += parseFloat(adv[d]) || 0; });
+            const earnings = pDays * rate;
+            return { present: pDays, absent: absents, totalEarnings: earnings, totalAdvance: totalAdv, balance: earnings - totalAdv };
+        }
+
+        // --- PDF Export ---
+        async function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const labor = state.labors.find(l => l.id === state.selectedLaborId);
+            const summary = getSummary(labor.id, state.currentMonth);
+            const doc = new jsPDF();
+            const monthName = state.currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+            doc.setFillColor(0, 86, 179); doc.rect(0, 0, 210, 45, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("LABOR REPORT", 105, 25, { align: 'center' });
+            
+            doc.setTextColor(0,0,0); doc.setFontSize(10);
+            doc.text(`Name: ${labor.name}`, 15, 60);
+            doc.text(`Rate: Rs. ${labor.salaryAmount}`, 140, 60);
+            doc.text(`Month: ${monthName}`, 15, 67);
+
+            const rows = [];
+            const daysInMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 0).getDate();
+            const att = state.attendance[labor.id] || {};
+            const adv = state.advances[labor.id] || {};
+            
+            for(let i = 1; i <= daysInMonth; i++) {
+                const date = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth(), i);
+                const dStr = getLocalISO(date);
+                const s = att[dStr];
+                if(s || adv[dStr]) {
+                    if(state.reportFilter === 'present' && !['present','onehalf','double'].includes(s)) continue;
+                    if(state.reportFilter === 'half' && s !== 'half') continue;
+                    if(state.reportFilter === 'absent' && s !== 'absent') continue;
+                    if(state.reportFilter === 'advance' && !adv[dStr]) continue;
+                    rows.push([date.toLocaleDateString('en-GB'), (s||'-').toUpperCase(), `Rs. ${adv[dStr]||0}`]);
+                }
+            }
+
+            doc.autoTable({ startY: 80, head: [['Date', 'Attendance', 'Advance']], body: rows });
+            doc.text(`Total Earned: Rs. ${summary.totalEarnings}`, 15, doc.lastAutoTable.finalY + 10);
+            doc.text(`Total Advance: Rs. ${summary.totalAdvance}`, 15, doc.lastAutoTable.finalY + 17);
+            doc.text(`Net Payable: Rs. ${summary.balance}`, 15, doc.lastAutoTable.finalY + 24);
+
+            doc.save(`${labor.name}_Report.pdf`);
+            notify("PDF Downloaded");
+        }
+
+        // --- UI Logic ---
+        function switchTab(t) { state.currentTab = t; state.currentView = 'list'; updateUI(); }
+        function goBack() { 
+            if(state.currentView === 'detail' || state.currentView === 'report') state.currentView = 'list';
+            else if(state.currentView === 'add' || state.currentView === 'edit') state.currentView = state.selectedLaborId ? 'detail' : 'list';
+            updateUI(); 
+        }
+
+        function handleAttendanceClick(dStr, type) {
+            if (type === 'present') { state.selectedDateKey = dStr; openAttendanceModal(new Date(dStr)); } 
+            else {
+                if(!state.attendance[state.selectedLaborId]) state.attendance[state.selectedLaborId] = {};
+                const curr = state.attendance[state.selectedLaborId][dStr];
+                state.attendance[state.selectedLaborId][dStr] = (curr === type) ? null : type;
+                sync(); updateUI();
+            }
+        }
+
+        function saveAttendance(status) {
+            if(!state.attendance[state.selectedLaborId]) state.attendance[state.selectedLaborId] = {};
+            const curr = state.attendance[state.selectedLaborId][state.selectedDateKey];
+            state.attendance[state.selectedLaborId][state.selectedDateKey] = (curr === status) ? null : status;
+            sync(); closeAttendanceModal(); updateUI();
+        }
+
+        function saveAdvanceAmount() {
+            const v = parseFloat(document.getElementById('advance-input').value) || 0;
+            if(!state.advances[state.selectedLaborId]) state.advances[state.selectedLaborId] = {};
+            state.advances[state.selectedLaborId][state.selectedDateKey] = v;
+            sync(); closeAdvanceModal(); updateUI(); notify("Advance Saved");
+        }
+
+        function openAttendanceModal(date) { 
+            document.getElementById('modal-date').innerText = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); 
+            const m = document.getElementById('attendance-modal'); m.classList.remove('hidden'); m.classList.add('flex'); 
+            setTimeout(() => document.body.classList.add('modal-open'), 10); 
+        }
+        function closeAttendanceModal() { document.body.classList.remove('modal-open'); setTimeout(() => document.getElementById('attendance-modal').classList.add('hidden'), 300); }
+        function closeAdvanceModal() { document.body.classList.remove('modal-open'); setTimeout(() => document.getElementById('advance-modal').classList.add('hidden'), 300); }
+
+        function updateUI() {
+            const main = document.getElementById('main-content');
+            const hTitle = document.getElementById('header-title');
+            const bBtn = document.getElementById('back-btn');
+            const hRight = document.getElementById('header-right');
+
+            hRight.innerHTML = ''; // Reset right header
+            bBtn.classList.toggle('hidden', state.currentView === 'list' && state.currentTab === 'labors');
+
+            // Nav Highlight
+            document.querySelectorAll('.nav-item').forEach(el => { el.classList.add('text-slate-400'); el.classList.remove('active-tab'); el.querySelector('div').classList.remove('active-tab-bg'); });
+            const activeNav = document.getElementById(`nav-${state.currentTab}`);
+            if(activeNav) { activeNav.classList.remove('text-slate-400'); activeNav.classList.add('active-tab'); activeNav.querySelector('div').classList.add('active-tab-bg'); }
+
+            if (state.currentTab === 'labors') {
+                if (state.currentView === 'list') { hTitle.innerText = "Labors"; renderLaborList(main); }
+                else if (state.currentView === 'detail') {
+                    const labor = state.labors.find(l => l.id === state.selectedLaborId);
+                    hTitle.innerText = labor.name;
+                    // Add Edit Button in Header
+                    hRight.innerHTML = `<button onclick="state.currentView='edit'; updateUI();" class="p-2 bg-white/20 rounded-xl active:bg-white/30 transition-all"><i class="fa-solid fa-pen-to-square text-lg"></i></button>`;
+                    renderLaborDetail(main, labor);
+                } else if (state.currentView === 'report') {
+                    hTitle.innerText = "Hisab-Kitab";
+                    renderReport(main, state.labors.find(l => l.id === state.selectedLaborId));
+                } else if (state.currentView === 'add' || state.currentView === 'edit') {
+                    hTitle.innerText = state.currentView === 'edit' ? "Edit Profile" : "New Profile";
+                    renderLaborForm(main, state.selectedLaborId ? state.labors.find(l => l.id === state.selectedLaborId) : null);
+                }
+            } else if (state.currentTab === 'settings') {
+                hTitle.innerText = "Settings"; renderSettings(main);
+            } else {
+                main.innerHTML = '<div class="py-40 text-center text-slate-300 font-bold opacity-30">Cashbook feature coming soon</div>';
+            }
+        }
+
+        function renderLaborList(container) {
+            let html = `<div class="p-5 flex flex-col gap-4">`;
+            state.labors.forEach(l => {
+                html += `<div onclick="state.selectedLaborId='${l.id}'; state.currentView='detail'; updateUI();" class="bg-white rounded-[2rem] border border-slate-100 p-6 flex items-center justify-between active:scale-[0.98] shadow-sm fade-in">
+                    <div class="flex items-center gap-5">
+                        <div class="w-14 h-14 rounded-3xl bg-[#0056b3] flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-blue-100">${l.name.charAt(0)}</div>
+                        <div><h3 class="font-extrabold text-slate-800 uppercase text-lg">${l.name}</h3><div class="text-slate-400 text-xs font-bold mt-1">${l.phone}</div></div>
+                    </div><i class="fa-solid fa-chevron-right text-slate-200"></i>
+                </div>`;
+            });
+            html += `</div><button onclick="state.selectedLaborId=null; state.currentView='add'; updateUI();" class="fixed bottom-24 right-6 bg-[#0056b3] text-white p-5 px-8 rounded-3xl shadow-2xl font-bold active:scale-90 transition-all z-40"><i class="fa-solid fa-plus"></i> Add Labor</button>`;
+            container.innerHTML = html;
+        }
+
+        function renderLaborDetail(container, labor) {
+            const summary = getSummary(labor.id, state.currentMonth);
+            const daysInMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 0).getDate();
+            const att = state.attendance[labor.id] || {};
+            const adv = state.advances[labor.id] || {};
+            
+            let html = `
+                <div class="bg-[#0056b3] text-white px-6 pb-12 pt-2 rounded-b-[3rem] -mt-1 shadow-inner"><p class="text-blue-100 text-[11px] font-black uppercase tracking-[0.2em] opacity-80">${labor.phone} • ₹${labor.salaryAmount}/Day</p></div>
+                <div class="p-5 flex flex-col gap-6 -mt-8">
+                    <div class="grid grid-cols-4 gap-2">
+                        ${renderStatCard('Present', summary.present, 'fa-check', 'text-green-500')}
+                        ${renderStatCard('Earned', '₹'+summary.totalEarnings, 'fa-wallet', 'text-blue-500')}
+                        ${renderStatCard('Advance', '₹'+summary.totalAdvance, 'fa-hand-holding-dollar', 'text-red-500')}
+                        ${renderStatCard('Payable', '₹'+summary.balance, 'fa-sack-dollar', 'text-orange-600')}
+                    </div>
+                    <div class="bg-white rounded-3xl border border-slate-100 flex items-center justify-between p-2">
+                        <button onclick="changeMonth(-1)" class="w-12 h-12 flex items-center justify-center text-blue-600 bg-blue-50 rounded-2xl active:bg-blue-100"><i class="fa-solid fa-chevron-left"></i></button>
+                        <span class="font-black text-slate-800 uppercase text-xs">${state.currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
+                        <button onclick="changeMonth(1)" class="w-12 h-12 flex items-center justify-center text-blue-600 bg-blue-50 rounded-2xl active:bg-blue-100"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                    <button onclick="state.currentView='report'; updateUI();" class="w-full bg-[#0056b3] text-white py-5 rounded-3xl font-black uppercase text-xs flex items-center justify-center gap-3 shadow-xl active:scale-95"><i class="fa-solid fa-file-invoice"></i> Open Report</button>
+                    <div class="bg-white border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm">
+                        <div class="bg-slate-50/50 grid grid-cols-[1fr,2.5fr,1fr] p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b"><span>Date</span><span class="text-center">Attendance</span><span class="text-right">Advance</span></div>
+                        <div class="divide-y divide-slate-50">`;
+            
+            for (let i = 1; i <= daysInMonth; i++) {
+                const date = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth(), i);
+                const dStr = getLocalISO(date);
+                const s = att[dStr];
+                html += `
+                    <div class="grid grid-cols-[1fr,2.5fr,1fr] p-4 items-center fade-in">
+                        <div class="flex flex-col"><span class="font-black text-slate-800 text-lg leading-none">${i.toString().padStart(2, '0')}</span><span class="text-[8px] text-slate-400 font-black uppercase mt-1">${date.toLocaleDateString('en-US',{weekday:'short'})}</span></div>
+                        <div class="flex justify-center gap-2">
+                            <button onclick="handleAttendanceClick('${dStr}', 'present')" class="attendance-btn ${['present','half','onehalf','double'].includes(s) ? 'active-p' : ''}">P</button>
+                            <button onclick="handleAttendanceClick('${dStr}', 'absent')" class="attendance-btn ${s === 'absent' ? 'active-a' : ''}">A</button>
+                            <button onclick="handleAttendanceClick('${dStr}', 'ot')" class="attendance-btn ${s === 'ot' ? 'active-ot' : ''}">OT</button>
+                            <button onclick="handleAttendanceClick('${dStr}', 'off')" class="attendance-btn ${s === 'off' ? 'active-off' : ''}">Off</button>
+                        </div>
+                        <div onclick="state.selectedDateKey='${dStr}'; triggerAdvance('${dStr}')" class="text-right text-xs font-black ${adv[dStr] > 0 ? 'text-red-500' : 'text-slate-300'} cursor-pointer">₹${adv[dStr]||0}</div>
+                    </div>`;
+            }
+            html += `</div></div></div>`;
+            container.innerHTML = html;
+        }
+
+        function renderReport(container, labor) {
+            const summary = getSummary(labor.id, state.currentMonth);
+            const att = state.attendance[labor.id] || {};
+            const adv = state.advances[labor.id] || {};
+            const rate = parseFloat(labor.salaryAmount) || 0;
+
+            const daysInMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 0).getDate();
+            const logs = [];
+            for(let i = 1; i <= daysInMonth; i++) {
+                const d = getLocalISO(new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth(), i));
+                const s = att[d];
+                const a = adv[d] || 0;
+                if(s || a > 0) {
+                    if(state.reportFilter === 'present' && !['present','onehalf','double'].includes(s)) continue;
+                    if(state.reportFilter === 'half' && s !== 'half') continue;
+                    if(state.reportFilter === 'absent' && s !== 'absent') continue;
+                    if(state.reportFilter === 'advance' && a === 0) continue;
+                    logs.push({ d, s, a });
+                }
+            }
+
+            container.innerHTML = `
+                <div class="p-5 flex flex-col gap-6">
+                    <div class="bg-[#0056b3] text-white p-8 rounded-[3rem] shadow-2xl flex justify-between items-center relative overflow-hidden">
+                        <div class="z-10"><p class="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Settlement</p><h2 class="text-4xl font-black tracking-tighter">₹${summary.balance}</h2></div>
+                        <div class="text-right z-10 space-y-1"><p class="text-[10px] font-bold opacity-60">Earned: ₹${summary.totalEarnings}</p><p class="text-[10px] font-bold text-red-300">Advance: ₹${summary.totalAdvance}</p></div>
+                    </div>
+                    
+                    <div class="flex flex-col gap-3">
+                        <div class="bg-white p-4 rounded-3xl border border-slate-100 flex items-center justify-between shadow-sm">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filter:</span>
+                            <select onchange="state.reportFilter=this.value; updateUI();" class="bg-indigo-50 text-indigo-600 font-bold px-4 py-2 rounded-2xl text-xs border-none outline-none pr-8">
+                                <option value="all" ${state.reportFilter === 'all' ? 'selected' : ''}>All Records</option>
+                                <option value="present" ${state.reportFilter === 'present' ? 'selected' : ''}>Present Only</option>
+                                <option value="half" ${state.reportFilter === 'half' ? 'selected' : ''}>Half Day Only</option>
+                                <option value="absent" ${state.reportFilter === 'absent' ? 'selected' : ''}>Absent Only</option>
+                                <option value="advance" ${state.reportFilter === 'advance' ? 'selected' : ''}>Advance Only</option>
+                            </select>
+                        </div>
+                        <button onclick="generatePDF()" class="bg-emerald-500 text-white py-5 rounded-3xl font-black uppercase text-xs flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all"><i class="fa-solid fa-file-pdf"></i> Download PDF</button>
+                    </div>
+
+                    <div class="bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden">
+                        <table class="w-full">
+                            <thead class="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                                <tr><th class="p-5 text-left">Date</th><th class="p-5 text-center">Type</th><th class="p-5 text-right">Settlement</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50">
+                                ${logs.map(log => {
+                                    let earn = 0;
+                                    if(log.s==='present') earn = rate; else if(log.s==='half') earn = rate*0.5;
+                                    else if(log.s==='onehalf') earn = rate*1.5; else if(log.s==='double') earn = rate*2;
+                                    return `
+                                        <tr class="fade-in">
+                                            <td class="p-5 font-bold text-slate-700 text-sm">${new Date(log.d).toLocaleDateString('en-GB', {day:'2-digit', month:'short'})}</td>
+                                            <td class="p-5 text-center"><span class="px-2.5 py-1 rounded-full text-[8px] font-black uppercase ${getStatusClass(log.s)}">${log.s || 'ADV'}</span></td>
+                                            <td class="p-5 text-right">
+                                                ${earn > 0 ? `<div class="text-xs font-black text-emerald-600">+₹${earn}</div>` : ''}
+                                                ${log.a > 0 ? `<div class="text-[10px] font-black text-red-500">-₹${log.a}</div>` : ''}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
+
+        function getStatusClass(s) {
+            if(['present','onehalf','double'].includes(s)) return 'bg-emerald-100 text-emerald-700';
+            if(s === 'absent') return 'bg-rose-100 text-rose-700';
+            if(s === 'half') return 'bg-amber-100 text-amber-700';
+            return 'bg-slate-100 text-slate-400';
+        }
+
+        function renderLaborForm(container, l) {
+            container.innerHTML = `
+                <form onsubmit="handleLaborSubmit(event)" class="p-6 flex flex-col gap-8 bg-white min-h-screen">
+                    <div class="space-y-6">
+                        <div class="p-5 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
+                            <i class="fa-solid fa-user text-blue-400"></i>
+                            <input name="name" required value="${l?l.name:''}" class="bg-transparent w-full outline-none font-bold uppercase" placeholder="Labor Name">
+                        </div>
+                        <div class="p-5 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
+                            <i class="fa-solid fa-phone text-blue-400"></i>
+                            <input name="phone" required value="${l?l.phone:''}" class="bg-transparent w-full outline-none font-bold" placeholder="Mobile Number">
+                        </div>
+                        <div class="p-5 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
+                            <i class="fa-solid fa-indian-rupee-sign text-blue-400"></i>
+                            <div class="flex flex-col w-full">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Daily Income (Rate)</span>
+                                <input name="salaryAmount" type="number" required value="${l?l.salaryAmount:'600'}" class="bg-transparent w-full outline-none font-black text-xl" placeholder="Daily Rate">
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-[#0056b3] text-white py-5 rounded-[2rem] font-black shadow-2xl active:scale-95 transition-all">Save Details</button>
+                    ${l ? `<button type="button" onclick="askDelete('${l.id}')" class="text-rose-500 font-black uppercase text-[10px] text-center w-full pt-2">Delete Profile</button>` : ''}
+                </form>`;
+        }
+
+        function renderSettings(container) {
+            container.innerHTML = `<div class="p-6 flex flex-col gap-5"><div onclick="exportJSON()" class="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex items-center justify-between cursor-pointer active:bg-slate-50 transition-all"><div><h3 class="font-extrabold text-slate-800">Export Backup</h3><p class="text-[10px] text-slate-400 font-bold uppercase mt-1">Download File</p></div><i class="fa-solid fa-download text-blue-500 text-xl"></i></div><label class="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex items-center justify-between cursor-pointer active:bg-slate-50 transition-all"><div><h3 class="font-extrabold text-slate-800">Import Data</h3><p class="text-[10px] text-slate-400 font-bold uppercase mt-1">Restore from File</p></div><i class="fa-solid fa-upload text-indigo-500 text-xl"></i><input type="file" class="hidden" onchange="importJSON(event)"></label></div>`;
+        }
+
+        function handleLaborSubmit(e) {
+            e.preventDefault(); const f = new FormData(e.target);
+            const l = { id: state.selectedLaborId || Date.now().toString(), name: f.get('name').toUpperCase(), phone: f.get('phone'), salaryAmount: f.get('salaryAmount') };
+            if(state.selectedLaborId) {
+                state.labors = state.labors.map(lb => lb.id === state.selectedLaborId ? l : lb);
+                state.currentView = 'detail'; // Go back to detail after edit
+            } else {
+                state.labors.push(l);
+                state.currentView = 'list';
+            }
+            sync(); updateUI(); notify("Labor Saved");
+        }
+
+        function triggerAdvance(d) {
+            const l = state.selectedLaborId; const ex = (state.advances[l] && state.advances[l][d]) || '';
+            document.getElementById('advance-input').value = ex;
+            document.getElementById('advance-modal-date').innerText = new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            const m = document.getElementById('advance-modal'); m.classList.remove('hidden'); m.classList.add('flex');
+            setTimeout(() => { document.body.classList.add('modal-open'); document.getElementById('advance-input').focus(); }, 10);
+        }
+
+        function askDelete(id) { if(confirm("Permanently delete this labor profile?")) { state.labors = state.labors.filter(l => l.id !== id); sync(); state.currentView = 'list'; updateUI(); } }
+        function changeMonth(d) { state.currentMonth.setMonth(state.currentMonth.getMonth() + d); updateUI(); }
+        function renderStatCard(l, v, i, c) { return `<div class="bg-white rounded-3xl border border-slate-50 p-2 py-4 flex flex-col items-center gap-1 text-center shadow-sm"><div class="w-9 h-9 rounded-2xl bg-slate-50 flex items-center justify-center ${c} mb-1 border border-slate-100 shadow-sm"><i class="fa-solid ${i} text-[11px]"></i></div><div class="text-[11px] font-black text-slate-800 leading-none">${v}</div><div class="text-[7px] text-slate-400 font-black uppercase mt-0.5 tracking-tighter">${l}</div></div>`; }
+        function exportJSON() { const d = { l: state.labors, a: state.attendance, ad: state.advances }; const b = new Blob([JSON.stringify(d)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'labor_manager_backup.json'; a.click(); }
+        function importJSON(e) { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (ev) => { const d = JSON.parse(ev.target.result); state.labors = d.l; state.attendance = d.a; state.advances = d.ad; sync(); updateUI(); notify("Backup Restored"); }; r.readAsText(f); }
+
+        window.onload = updateUI;
+    </script>
+</body>
+</html>
+
+```
